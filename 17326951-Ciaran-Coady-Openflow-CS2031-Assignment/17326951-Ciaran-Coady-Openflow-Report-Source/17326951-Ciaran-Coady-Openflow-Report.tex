@@ -1,0 +1,349 @@
+%%
+% Template for Assignment Reports
+% 
+%
+
+\documentclass{article}
+
+\usepackage{fancyhdr} % Required for custom headers
+\usepackage{lastpage} % Required to determine the last page for the footer
+\usepackage{extramarks} % Required for headers and footers
+\usepackage{graphicx,color}
+\usepackage{anysize}
+\usepackage{amsmath}
+\usepackage{natbib}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{lipsum}  
+
+% Margins
+%\topmargin=-0.45in
+%\evensidemargin=0in
+%\oddsidemargin=0in
+\textwidth=6.5in
+%\textheight=9.0in
+%\headsep=0.25in 
+
+\linespread{1.0} % Line spacing
+
+%%------------------------------------------------
+%% Image and Listing code
+%%------------------------------------------------
+%%sw \includecode{caption for table of listings}{caption for reader}{filename}
+\newcommand{\includecode}[3]{\lstinputlisting[float,floatplacement=H, caption={[#1]#2}, captionpos=b, frame=single]{#3}}
+
+
+%%sw \includescalefigure{label}{short caption}{long caption}{scale}{filename}
+\newcommand{\includescalefigure}[5]{
+\begin{figure}[htb]
+\centering
+\includegraphics[width=#4\linewidth]{#5}
+\captionsetup{width=.8\linewidth} 
+\caption[#2]{#3}
+\label{#1}
+\end{figure}
+}
+
+%%sw \includefigure{label}{short caption}{long caption}{filename}
+\newcommand{\includefigure}[4]{
+\begin{figure}[htb]
+\centering
+\includegraphics{#4}
+\captionsetup{width=.8\linewidth} 
+\caption[#2]{#3}
+\label{#1}
+\end{figure}
+}
+
+
+
+%%------------------------------------------------
+%% Parameters
+%%------------------------------------------------
+% Set up the header and footer
+\pagestyle{fancy}
+\lhead{\authorName} % Top left header
+\chead{\moduleCode\ - \assignmentTitle} % Top center header
+\rhead{\firstxmark} % Top right header
+\lfoot{\lastxmark} % Bottom left footer
+\cfoot{} % Bottom center footer
+\rfoot{Page\ \thepage\ of\ \pageref{LastPage}} % Bottom right footer
+\renewcommand\headrulewidth{0.4pt} % Size of the header rule
+\renewcommand\footrulewidth{0.4pt} % Size of the footer rule
+\setlength\parindent{0pt} % Removes all indentation from paragraphs
+
+\newcommand{\assignmentTitle}{Assignment\ \#2: Openflow} % Assignment title
+\newcommand{\moduleCode}{CS2031} 
+\newcommand{\moduleName}{Telecommunication\ II} 
+\newcommand{\authorName}{Ciaran\ Coady} % Your name
+\newcommand{\authorID}{17326951} % Your student ID
+\newcommand{\reportDate}{\printDate}
+
+%%------------------------------------------------
+%%	Title Page
+%%------------------------------------------------
+\title{
+\vspace{-1in}
+\begin{figure}[!ht]
+\flushleft
+\includegraphics[width=0.4\linewidth]{reduced-trinity.png}
+\end{figure}
+\vspace{-0.5cm}
+\hrulefill \\
+\vspace{0.5cm}
+\textmd{\textbf{\moduleCode\ \moduleName}}\\
+\textmd{\textbf{\assignmentTitle}}\\
+\vspace{0.5cm}
+\hrulefill \\
+}
+
+\author{\textbf{\authorName,\ \authorID}}
+
+\date{\today}
+
+
+
+%%------------------------------------------------
+%% Document
+%%------------------------------------------------
+\begin{document}
+\lstset{language=Java, captionpos=b, frame=single, keywordstyle=\color{black}\bfseries, stringstyle=\ttfamily}
+\captionsetup{width=.8\linewidth} 
+
+\maketitle
+\tableofcontents
+\vspace{0.5in}
+
+\pagebreak
+%%------------------------------------------------
+\section{Introduction}
+
+%% The introduction should describe the general problem that should be addressed in the assignment, the approach that you have taken 
+
+The problem description for this assignment outlined a network consisting of one controller, a number of switches and a number of endpoints. This network is to operate much like an openflow network does and is to incorporate some of the features of an openflow network.
+
+In this report, I will discuss the main features of my solution, along with some theory of how it works. Followed by the implementation and an explanation of the code used.
+
+
+%%------------------------------------------------
+\section{Overall Design}
+
+%% The section on the theory at the basis of the assignment should describe the concepts and protocols that were used to realise a solution.
+
+Looking at the project specification, it was required that the following features were implemented:
+
+\begin{description}
+	\item [Controller:] Accept contact from switches and issue feature requests. Accept PacketIn messages. Send out FlowMod messages.
+	\item [Switch:] Make contact with the controller and reply to feature requests. Send out PacketIn messages. Receive and incorporate instructions from FlowMod messages. Receive messages from end-nodes. Forward messages depending on the flowtable.
+	\item [End-Node:] Send messages addressed to another end-nodes. Receive messages.
+\end{description}
+
+
+
+%%------------------------------------------------
+\subsection{Openflow}
+
+\includefigure{OpenflowTopology}{A simple topology of an Openflow Network}{The figure above demonstrates a simple topology of a network using Openflow. The switches in the network are connected to a controller. A switch will contact this controller when an incoming packet has no matching rules in the flowtable.}{openflowtopology.PNG}
+
+Openflow is a networking method that uses switches and controllers to route packets from one endpoint to another. Each switch is connected to a controller, other switches or end-nodes. Each switch uses a flowtable which it has received from the controller to route packets to the correct destination. This flowtable consists of a number of rules that influences where incoming packets get routed. If an incoming packet matches a field in the flowtable, that rule gets used. If a switch received a packet that is not in its flowtable it will contact the controller to modify its flowtable so it knows where to route this packet. An End-node will want to send packets to other end-nodes. When a packet is sent it moves from the end-node to the switch that it is connected to. The switch then routes the packets based on its flowtable. The packet moves from hop to hop in this manner until it reaches its destination or gets dropped.
+\newline
+\newline
+
+%% Ideally there would be references to the Openflow standard and further down to the definition of Link State Routing, OPSF, and Djikstra's Shortest Path - for this assignment I have omitted this information; for a 4th-year or dissertation report, this would be required.
+The Openflow standard defines a number of packet types:
+\begin{description}
+	\item [Hello:] Is an announcement from a network element to a controller that it is alive and assumes to be under the control of the controller.
+	\item [FeatureRequest:] A FeatureRequest is sent by the controller, after a hello packet is received from a switch in the initialization stage. The purpose of this packet is for the controller to gather information about the switch, which it will use to configure flowtables.
+	\item [FeatureReply:] This is the response to a FeatureRequest and is sent by a switch to the controller. The switch will send its identity and basic capabilities, such as what connections it has to the controller.
+	\item [PacketIn:] This packet is sent from a switch to the controller if a packet is received that doesn't match its flowtable. The packet received by the switch is forwarded to the controller either in full or partially for further action. The controller will then decided where the destination of the packet is and send a FlowMod or PacketOut packet to the switch. 
+	\item [PacketOut]: These are used by the controller to send packets out of a specified port on the switch, and to forward packets received via Packet-in messages.
+	\item [FlowMod:] These are used by the controller to update the FlowTable of a switch.
+\end{description}
+
+
+\subsection{Link State Routing}
+
+Link State routing consists of two steps: Establishing a view of the topology and executing a shortest path algorithm such as Djikstra's Shortest Path. In the first step, routers in a network would measure their connectivity to their neighbours e.g. the latency on each port to a router or endpoint connected to that port, and broadcast this information to all other network elements in the network. Every router will gather this information for a certain period and then execute a shortest path algorithm on the data that has been received during that period. 
+\newline
+\newline
+Due to time constraints the system that was implemented only operates using hard coded routing tables, but for a small scale implementation Djikstra's Shortest Path and other link state routing methods are not really necessary.
+
+\includescalefigure{LStopology}{Link State Topology}{An example of Link State topology}{0.5}{LStopology.png}
+
+Djikstra's Shortest Path algorithm is a greedy algorithm that pursues in every step the subsequent shortest path, starting with the router where it is executed as origin. In a first step, the current node e.g. router itself would be added to the routing table, then the neighbours of this node would be added to a list of nodes, which have not yet been added to the routing table. The cost to reach these pending nodes is the cost from the origin to the current node, plus the cost from the current node to the neighbour. In the next step, it will pick the node with the lowest cost out of the list of pending nodes, add it to the routing table and repeat the first step with this node as current node.
+
+\includescalefigure{LSDjikstra}{Example for Djikstra's Shortest Path}{An example  for Djikstra's Shortest Path}{0.5}{LSDjikstra.png}
+\pagebreak
+
+\subsection{Design of Network Elements}
+For this assignment it was crucial that each network element had the facility for user interaction. Based on my experience from assignment 1, I decided to use the tcdIO library again, allowing me to make use of the terminal. This gave good separation between each network element and allowed for an easy to follow, easy to debug program flow. 
+\newline
+\newline
+To allow for scalability in the future, each network element is configured at run-time using the terminal. Switches are initialized using a switch number, as are the end-nodes. This way extra network elements could be added for future expansion. When each network element is initialized, it gets allocated a port number by  adding its number to a constant. e.g. the starting switch port number is 5002, so switch number 1 will be allocated port number 5002+1=5003.
+
+\includefigure{SwitchInterface}{Switch Terminal Interface}{This shows the initialization process for switch number 1}{Switch-Interface.PNG}
+ 
+
+\subsection{Packet Descriptions}
+Each packet is created using the packet class. A packet is first given a header, byte 0 is what type of packet it is e.g. FlowMod, PacketIn. 
+\newline
+Byte 1 is the end destination that the packet is trying to get to.
+\newline
+Byte 2 is the overall length of the packet.
+\newline
+\newline
+The remaining bytes in the packet then contain the message that is being sent. In the case of a PacketOut packet the message is the string that the end-user has entered in the terminal. In the case of a FlowMod packet, the message portion will contain the updated flowtable that is being sent from the controller to the switch.
+
+\includefigure{PacketLayout}{Graphical Packet Layout}{The packet layout that was used in this assignment}{Packet-Layout.PNG}
+\pagebreak
+%%------------------------------------------------
+\section{Implemenation}
+
+This section presents the implementation details of the individual network elements, the controller, the endpoints and switches. It also discusses the layout of the messages between the endpoints and the packets exchanged between the switches and the controller.
+
+\subsection{Node}
+
+Identical to the last assignment, All network elements are an extension of the node class. In this case the only pieces of functionality contained in the Node is the initialization of a listener thread that continuously monitors the node's port waiting for packets. The Node also includes the functionality to send a packet, by using socket.send() to send the packet to the destination. Putting this code in the Node made for neater code elsewhere.
+
+\subsection{Packet}
+
+The packet class holds all of the packet formatting and encoding functionality. A Packet object has all of the included methods of the Packet class and also a private DatagramPacket which can be accessed using the getPacket() method.
+\newline
+\newline
+The first method included is the addHeader() method. This takes the header information and puts it into a passed byte array in the correct locations.
+\newline
+\newline
+The addMessageContent() method takes a packetContent byte array and a String message. It converts the String into a byte array and places it into the packetContent byte array using a for-loop.
+\newline
+\newline
+The featureRequestPacket() method takes the portNumber of the switch that is getting sent the featureRequest, the number of the switch and the entire flowtable from the controller. Using a for-loop the rows of the flowtable that are relevant to the switch are converted to a string. The string is then bundled into a new packet that will be sent to the switch.
+\pagebreak
+\includescalefigure{PacketFeatureRequest}{FeatureRequest Method}{The featureRequestMethod() a described above}{0.9}{Packet-FeatureRequest.PNG}
+
+The featureReply() method, helloPacket() method and packetIn() method all share the same code but were made into separate methods for future expansion and also helping make the code more understandable.
+These methods take in a portNumber and nodeNumber as parameters. The node number is used when making the header of the packet and the port number is used when setting the packet destination.
+\includefigure{GeneralPacket}{GeneralPacket Method Body}{This shows the method body that is shared by the featureReply(), helloPacket() and PacketIn() methods}{General-Packet-Method.PNG}
+\pagebreak
+
+The packetOut() method is used when a node is sending a packet to the next hop in the network. The parameters are the portNumber that packet is being sent to, the nodeNumber which is the endDestination of the packet and the message that is to be sent. Much like the other methods, a byte array gets created, the header is added and the message is inserted. After this the destination address is set and the packet is stored in the local DatagramPacket variable.
+
+\includefigure{PacketOutMethod}{PacketOutMethod}{This shows the packetOut() method}{Packet-PacketOut.PNG}
+
+The last method included in the packet class is the flowMod() method. This has identical functionality to the featureRequestPacket() method, with the exception that packet type is different. Much like with other duplicate methods, I decided to keep them as separate functions in case I had time to implement extra features.
+
+
+\subsection{EndNode}
+
+The EndNode uses similar code to the subscriber class from the last assignment. The interface of the EndNode is used to read the message to be sent and the EndNode that the user wishes to send the information to. When an EndNode is first started it asks what EndNode number it is and what switch it is connected to. This information is then passed into the constructor of the EndNode and its port number along with other information gets intialised.
+
+\includefigure{EndNodeIntialisation}{EndNode Intialisation}{The interface that the user interacts with when an endnode is first started}{Endnode-Intialisation.PNG}
+
+\begin{lstlisting}[caption={[Input of Message] Upon intialising the Endnode, the user is being asked to input the Endnode number and the switch it is connected to}]
+int endNodeNumber = Integer.parseInt(terminal.readString
+		("Please enter the endNode number: "));
+int connectedSwitch = Integer.parseInt(terminal.readString
+("Please enter the swtich number you are connected to: ")) +
+	 Constants.SWITCH_BASE_PORT;
+(new EndNode(terminal, endNodeNumber, connectedSwitch)).start();
+\end{lstlisting}
+
+The constructor then takes these values and initializes the EndNode with its own port and listener thread.
+
+If an Endpoint were to receive a packet it would run the onReceipt() method. This method prints the received string to the terminal.
+
+The composeMessage() method takes no parameters and is called when a user wants to send a message. It asks the user what they would like to send and to who they want to send it to. These strings are read in from the terminal and used to create a messagePacket  which is a PacketOut packet.
+
+\includescalefigure{ComposeMessageMethod}{EndNode ComposeMessage}{The composeMessage() Method}{0.97}{composeMessage-EndNode.PNG}
+
+Once constructed, this packet is sent on to the Switch that this Endnode is connected to using the sendPacket() method included in the node class.
+
+\subsection{Switch}
+The Switch is initialized identically to the EndNode. When a switch is first started up, it asks the user what switch number it is and then proceeds to use this information in the constructor. 
+\newline
+After the switch has been initialized there is no more interaction from the user, the terminal is only used to display information about what packets are being sent from the switch and received by the switch.
+
+\includefigure{SwitchDisplay}{Switch in normal operation}{Above is the output from a switch in its normal operation}{Switch-Display.PNG}
+
+After a switch gets initialized it sends a hello packet to the controller. The controller then responds with a hello packet followed by a FeatureRequest packet. In this implementation the controller has the overall flowtable for the example topology and sends the relevant flowtable information in the FeatureRequest packet. When the Switch receives the FeatureRequest packet it processes the flow table and stores it locally using the processFlowTable() method. Once this is complete the Switch responds with a FeatureResponse packet. If I had implemented link state routing this packet would contain information about the Switch that would allow the controller to calculate shortest paths.
+
+ \includescalefigure{SwitchIntialisation}{Switch onReceipt()}{This shows the onReceipt() method snippet that is involved with the intialisation of the switch}{0.7}{Switch-Intialisation.PNG}
+ 
+ In the processFlowTable() method the flowtable is first removed from the message portion of the packet. Then due to the fact that any unused space in the packet gets padded with 0 bytes the java String class is used to remove and 0's. The string is then converted back to the UTF-8 character set. After this the string is then inserted into the local flowtable using a for-loop and some modulo arithmetic.
+ 
+\includescalefigure{ProcessFlowtable}{ProcessFlowtable Method}{This shows the processFlowTable() method}{0.7}{ProcessFlowTable-Method.PNG}
+\pagebreak
+
+When a Switch receives a packetOut packet from another network node, it caches this packet to a buffer and sends a packetIn packet to the controller. Then the controller makes a decision on where the switch should forward the packet. The controller sends back a FlowMod packet, which the switch implements and then using this updated flowtable, forwards the packet. In this implementation the the flowtable is hard-coded and doesn't change after the initialization stage of the program. Therefore packetIn packets and this functionality are not really used, but would allow for easy expansion if the feature set of the code was to be improved in the future.
+
+\includescalefigure{PacketOut}{onReceipt() method showing packetOut}{This shows the section of the onReceipt() method that handles a packetOut packet. The packet gets saved to a buffer followed by the switch sending the end destination of the received packet to the controller in a new packetIn packet }{1.0}{onReceipt-Switch-PacketOut.PNG}
+
+\includescalefigure{FlowMod}{onReceipt() method showing FlowMod}{This shows the section of the onReceipt() method that handles a FlowMod packet. When a FlowMod packet is received, the updated flowtable it includes gets implemented, then this flowtable is used to forward the packet that is contained in the buffer}{0.8}{onReceipt-Switch-FlowMod.PNG}
+
+\includescalefigure{forwardPacket}{forwardPacket method}{This shows the forwardPacket() method. This method takes no parameters and has no return values. It extracts the byte array from the packet stored in the buffer. Then using a for-loop moves through the flowtable until it finds the rule that corresponds to the end destination of the packet. If a rule is found the destination of the next hop gets updated and the packet is sent to the next hop. After this the buffer gets cleared}{0.9}{forwardPacket-method.PNG}
+
+\pagebreak
+
+\subsection{Controller}
+
+The initialization of the controller is very similar to a basic version of the broker from the last assignment. The constructor sets the port number for the controller which is based on a constant and starts its listener thread. 
+\newline
+\newline
+The broker has no interaction with the user, but instead acts much like a receiver, receiving packets from various sources and deciding what to do with them. The mainline of the controller calls its constructor and after this continuously loops using a while(true) loop, to wait for incoming packets. 
+\newline
+\newline
+The controller holds the main flowtable for this system, which is stored in the form of a 2D array of integers. Unfortunately I didn't get time to implement link state routing or any distance based routing algorithm, as a result the flowtable in the controller is set before run-time and doesn't change.
+
+\includescalefigure{MasterFlowTable}{MasterFlowTable}{This shows the 2D array that stores the master flowtable in this topology}{1}{Master-Flowtable.PNG}
+
+Most of the functionality of the controller occurs in the onReceipt() method shown below in figure~\ref{onReceiptHelloController}. If the controller receives a hello packet from a switch, it send a hello packet in response to that switch. Following this the controller sends a featureRequest packet which contains the relevant section of the flowtable for that Switch. All of the functionality behind formatting these packets is contained in the packet class, leaving the controller code easy to read.
+\pagebreak
+\includescalefigure{onReceiptHelloController}{onReceiptHelloController}{This shows the section of the onReceipt() method that deals with a hello packet as described above}{1}{onReceipt-Controller-Hello.PNG}
+
+In this implementation if the controller receives a packetIn packet from a switch, it just takes the switch's number and returns its flowtable as done previously when sending a feature request packet. A packetIn packet from a switch signifies that the switch either doesn't have an entry in it flowtable to forward this packet or is asking the controller what is the best place to send it. If a more advanced algorithm had been implemented, the controller would do some calculations and decide where to send the packet based on various factors. The controller sends this flowtable using a FlowMod packet.
+
+\includescalefigure{onReceiptPacketInController}{onReceiptPacketInController}{This shows the section of the onReceipt() method that deals with a packetIn packet as described above.}{1}{onReceipt-Controller-PacketIn.PNG}
+
+%%------------------------------------------------
+\section{Discussion}
+
+The strengths of this program are its simplicity and expand-ability. I only used a small sample topology, but to expand the system all that would need to be altered would be the master flowtable that is contained in the controller and a few minor pieces of code. It also has most of the structural work laid down when it comes to sending a receiving packets, this means that it would not be too difficult to implement a more advanced routing technique. 
+\newline
+\newline
+This implementation does not include any error checking or Automatic Repeat Request technique. As a result, if packets are sent simultaneously it will result in packets being dropped and the system will break. This could be improved upon by adding some of the Stop and Wait functionality that was included in assignment 1 and extending it to work in this scenario. This would add some extra complication as timeouts and Acknowledgments would have to be introduced to the system, therefore I decided not to implement it.
+\newline
+\newline
+Another weakness is that all network elements must be initialized one at a time, otherwise the system will fail as hello packets to/from the controller will get dropped.
+\newline
+\newline
+There is a problem with FlowMod packets in this system. If a switch receives a FlowMod packet from the controller, it does not get parsed correctly, cannot be successfully converted to a flowtable and as a result corrupts the existing flowtable in the switch. This prevents packets from being routed properly. I couldn't track down the cause of this problem as the same method works perfectly for featureRequest packets. After spending hours trying to solve the bug I decided to not process the flowtable received in the flowMod packets. This works fine in this system as nothing changes in the flowtable at any point.
+
+\includescalefigure{ProgramFlow}{Showing program in operation}{This figure shows terminal windows for each network element in the sample topology while in operation}{1}{ProgramFlow.png}.
+
+
+%%------------------------------------------------
+%% Summary of the document i.e. what was presented, what was the outcome of the project and the document.
+\section{Summary}
+
+This report has described my attempt at a solution to address the routing of messages in a small topology based on an Openflow-like approach. I've outlined the background research I did before beginning the project and some of the theory behind features I didn't get to implement such as link state routing. I discussed the implementation details along with some of the design choices that I made through-out the development of this solution. It does have some flaws but I feel like it does a good job of representing how an openflow-like system works.
+
+%%------------------------------------------------
+%% The reflection should layout your thoughts on the assignment
+%% How many hours did you spent on the assignment? What worked well for you/what didn't?
+%% What would you improve/change in your approach for the next assignment?
+\section{Reflection}
+
+I'm much happier with the outcome of this assignment compared to the first one. I learned from the mistakes I made in assignment 1 resulting in this assignment taking much less time, all in all taking about 25 hours to complete. I decided not to use as many code snippets in the place of explainations, only including code snippets where anything interesting or difficult was being carried out. Much like the last assignment I found the labs to be a cruicial way to expand my understanding on the topic and also get help when I was stuck or unsure at any point. I handled the development process much better than before, implementing small chunks of code at a time, slowly building up to the final solution. While I didn't implement any link state routing, I now understand how it works after completing this assignment and am very pleased with my general understanding of openflow.
+
+\section{References}
+
+-CS2031 notes and example documents.
+
+-Java Documentation - www.oracle.com
+
+-Openflow specifications and documentation - https://www.opennetworking.org
+
+\end{document}
+\end{document}
+
